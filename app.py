@@ -9,120 +9,137 @@ import google.generativeai as genai
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO E IA
-st.set_page_config(page_title="IA Financeira: Previsão & Auditoria", layout="wide")
+# 1. INICIALIZAÇÃO E CONFIGURAÇÃO
+st.set_page_config(page_title="IA Financeira Pro: Auditoria & Insight", layout="wide")
 
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model_gemini = genai.GenerativeModel('gemini-2.0-flash')
-except:
-    st.error("Erro na API Key nos Secrets.")
-    st.stop()
+# Função para garantir que a API seja configurada sem erros de primeira chamada
+@st.cache_resource
+def configurar_ai():
+    try:
+        chave = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=chave)
+        return genai.GenerativeModel('gemini-2.0-flash')
+    except Exception as e:
+        st.error(f"Erro ao configurar API: {e}")
+        return None
+
+model_gemini = configurar_ai()
 
 # 2. FUNÇÕES TÉCNICAS
 def calcular_rsi(series, window=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    return 100 - (100 / (1 + (gain / loss)))
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
 # 3. INTERFACE LATERAL
-st.sidebar.header("⚙️ Configurações")
+st.sidebar.header("⚙️ Painel de Controle")
 ticker = st.sidebar.text_input("Ticker (Ex: IAU, PETR4.SA, AAPL)", value="IAU").upper()
-periodo = st.sidebar.selectbox("Histórico", ["2y", "5y", "10y"])
+periodo = st.sidebar.selectbox("Histórico de Análise", ["2y", "5y", "10y"], index=0)
 
-st.title("💹 Inteligência Financeira: Previsão vs Auditoria")
+st.title("💹 Sistema de Inteligência Financeira")
+st.caption("Análise de Tendência, Previsão por Rede Neural e Auditoria de Assertividade")
 
-# 4. PROCESSAMENTO DE DADOS
-if st.sidebar.button("🚀 Iniciar Análise Completa"):
-    with st.spinner('Processando dados e treinando Redes Neurais...'):
-        df = yf.download(ticker, period=periodo)
-        if not df.empty:
-            if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+# 4. BOTÃO DE EXECUÇÃO COM TRATAMENTO DE ERRO
+if st.sidebar.button("🚀 Iniciar Relatório Completo"):
+    try:
+        with st.spinner('Acessando dados e treinando IA...'):
+            df = yf.download(ticker, period=periodo)
             
-            # Cálculo de Médias e RSI
-            df['MA20'] = df['Close'].rolling(window=20).mean()
-            df['MA50'] = df['Close'].rolling(window=50).mean()
-            df['RSI'] = calcular_rsi(df['Close'])
-            
-            # --- CRIAÇÃO DAS ABAS ---
-            aba_prev, aba_auditoria = st.tabs(["🔮 Previsão de Futuro", "⚖️ Auditoria de Acertos"])
+            if df.empty:
+                st.error("Não foi possível encontrar dados para este Ticker.")
+            else:
+                # Limpeza de MultiIndex para tickers americanos
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
 
-            # --- ABA 1: PREVISÃO ---
-            with aba_prev:
-                col_p1, col_p2 = st.columns([2, 1])
-                with col_p1:
-                    fig_temp = go.Figure()
-                    fig_temp.add_trace(go.Scatter(x=df.index, y=df['Close'].values.flatten(), name='Preço', line=dict(color='#00d4ff')))
-                    fig_temp.add_trace(go.Scatter(x=df.index, y=df['MA20'], name='Média 20d', line=dict(dash='dash', color='#ffcc00')))
-                    fig_temp.update_layout(template="plotly_dark", title=f"Evolução Temporal: {ticker}", hovermode="x unified")
-                    st.plotly_chart(fig_temp, use_container_width=True)
+                # Indicadores Técnicos
+                df['MA20'] = df['Close'].rolling(window=20).mean()
+                df['MA50'] = df['Close'].rolling(window=50).mean()
+                df['RSI'] = calcular_rsi(df['Close'])
                 
-                with col_p2:
-                    # Treino para Futuro
-                    dados_f = df[['Close']].dropna().values
+                # Criando as Abas
+                aba_prev, aba_auditoria = st.tabs(["🔮 Previsão & Analise", "⚖️ Auditoria de Performance"])
+
+                # --- ABA 1: PREVISÃO E INSIGHTS DETALHADOS ---
+                with aba_prev:
+                    col_p1, col_p2 = st.columns([2, 1])
+                    
+                    # Treino da RNA para o Futuro
+                    dados_v = df[['Close']].dropna().values
                     scaler = MinMaxScaler()
-                    norm_f = scaler.fit_transform(dados_f)
-                    model_f = Sequential([Dense(64, activation='relu', input_dim=1), Dense(1)])
+                    norm = scaler.fit_transform(dados_v)
+                    X_f, y_f = norm[:-1], norm[1:]
+                    
+                    model_f = Sequential([Dense(64, activation='relu', input_dim=1), Dense(32, activation='relu'), Dense(1)])
                     model_f.compile(optimizer='adam', loss='mse')
-                    model_f.fit(norm_f[:-1], norm_f[1:], epochs=30, verbose=0)
+                    model_f.fit(X_f, y_f, epochs=30, verbose=0)
                     
-                    pred_f = scaler.inverse_transform(model_f.predict(norm_f[-1].reshape(1,1)))[0][0]
-                    preco_atual = dados_f[-1][0]
-                    
-                    st.metric("Preço Atual", f"{preco_atual:.2f}")
-                    st.metric("Previsão Próximo Fechamento", f"{pred_f:.2f}", delta=f"{((pred_f/preco_atual)-1)*100:.2f}%")
-                    st.write(f"**RSI:** {df['RSI'].iloc[-1]:.2f}")
-                    st.markdown("---")
-                    st.subheader("🤖 Insight Gemini")
-                    st.info(model_gemini.generate_content(f"Analise o ativo {ticker} com preço {preco_atual:.2f} e previsão de {pred_f:.2f}. Curto e grosso.").text)
+                    pred_f = scaler.inverse_transform(model_f.predict(norm[-1].reshape(1,1)))[0][0]
+                    preco_atual = dados_v[-1][0]
+                    rsi_atual = df['RSI'].iloc[-1]
 
-            # --- ABA 2: AUDITORIA ---
-            with aba_auditoria:
-                # Simulação de Ontem
-                preco_real_ontem = float(df['Close'].iloc[-1])
-                preco_anteontem = float(df['Close'].iloc[-2])
-                
-                # Treino "Cego" (sem o dado de ontem)
-                dados_aud = df['Close'].iloc[:-1].values.reshape(-1, 1)
-                scaler_aud = MinMaxScaler()
-                norm_aud = scaler_aud.fit_transform(dados_aud)
-                model_aud = Sequential([Dense(32, activation='relu', input_dim=1), Dense(1)])
-                model_aud.compile(optimizer='adam', loss='mse')
-                model_aud.fit(norm_aud[:-1], norm_aud[1:], epochs=30, verbose=0)
-                
-                pred_ontem = float(scaler_aud.inverse_transform(model_aud.predict(scaler_aud.transform([[preco_anteontem]])))[0][0])
-                acertou = (preco_real_ontem > preco_anteontem) == (pred_ontem > preco_anteontem)
-                
-                c_aud1, c_aud2 = st.columns([1, 1])
-                with c_aud1:
-                    st.metric("Direção de Ontem", "ACERTOU ✅" if acertou else "ERROU ❌")
-                    # Gráfico de Barras Elegante
+                    with col_p1:
+                        fig_temp = go.Figure()
+                        fig_temp.add_trace(go.Scatter(x=df.index, y=df['Close'].values.flatten(), name='Preço', line=dict(color='#00d4ff', width=2)))
+                        fig_temp.add_trace(go.Scatter(x=df.index, y=df['MA20'], name='Média 20d', line=dict(dash='dash', color='#ffcc00')))
+                        fig_temp.update_layout(template="plotly_dark", title=f"Evolução Temporal: {ticker}", hovermode="x unified")
+                        st.plotly_chart(fig_temp, use_container_width=True)
+
+                    with col_p2:
+                        st.metric("Preço Atual", f"{preco_atual:.2f}")
+                        st.metric("Previsão RNA", f"{pred_f:.2f}", delta=f"{((pred_f/preco_atual)-1)*100:.2f}%")
+                        st.write(f"**RSI (14d):** {rsi_atual:.2f}")
+                        st.markdown("---")
+                        
+                        # INSIGHT DETALHADO DO GEMINI
+                        st.subheader("🤖 Analise do Especialista")
+                        prompt_detalhado = (
+                            f"Como analista financeiro senior, examine o ativo {ticker}. "
+                            f"Preço atual: {preco_atual:.2f}. Previsão da RNA para amanhã: {pred_f:.2f}. "
+                            f"O RSI está em {rsi_atual:.2f} (sobrecompra > 70, sobrevenda < 30). "
+                            f"A Média Móvel de 20 dias está em {df['MA20'].iloc[-1]:.2f}. "
+                            f"Forneça uma análise técnica detalhada sobre a força da tendência e os níveis de suporte/resistência."
+                        )
+                        if model_gemini:
+                            res = model_gemini.generate_content(prompt_detalhado)
+                            st.info(res.text)
+
+                # --- ABA 2: AUDITORIA (BACKTESTING) ---
+                with aba_auditoria:
+                    preco_real_ontem = float(df['Close'].iloc[-1])
+                    preco_anteontem = float(df['Close'].iloc[-2])
+                    
+                    # Treino Cego
+                    dados_aud = df['Close'].iloc[:-1].values.reshape(-1, 1)
+                    scaler_aud = MinMaxScaler()
+                    norm_aud = scaler_aud.fit_transform(dados_aud)
+                    model_aud = Sequential([Dense(32, activation='relu', input_dim=1), Dense(1)])
+                    model_aud.compile(optimizer='adam', loss='mse')
+                    model_aud.fit(norm_aud[:-1], norm_aud[1:], epochs=30, verbose=0)
+                    
+                    pred_ontem = float(scaler_aud.inverse_transform(model_aud.predict(scaler_aud.transform([[preco_anteontem]])))[0][0])
+                    acertou = (preco_real_ontem > preco_anteontem) == (pred_ontem > preco_anteontem)
+                    
+                    st.metric("Assertividade de Direção", "CORRETA ✅" if acertou else "INCORRETA ❌")
+                    
                     fig_bar = go.Figure(data=[
-                        go.Bar(name='Real', x=['Ontem'], y=[preco_real_ontem], marker_color='#00d4ff', width=0.3),
-                        go.Bar(name='Previsto', x=['Ontem'], y=[pred_ontem], marker_color='#ffcc00', width=0.3)
+                        go.Bar(name='Fechamento Real', x=['Ontem'], y=[preco_real_ontem], marker_color='#00d4ff', width=0.2),
+                        go.Bar(name='Previsão da IA', x=['Ontem'], y=[pred_ontem], marker_color='#ffcc00', width=0.2)
                     ])
-                    # Adicionando Linha de Margem de Erro (2%)
-                    margem_sup = pred_ontem * 1.02
-                    margem_inf = pred_ontem * 0.98
-                    fig_bar.add_hline(y=margem_sup, line_dash="dot", line_color="gray", annotation_text="Margem +2%")
-                    fig_bar.add_hline(y=margem_inf, line_dash="dot", line_color="gray", annotation_text="Margem -2%")
+                    # Linhas de Margem de Erro
+                    fig_bar.add_hline(y=pred_ontem*1.01, line_dash="dot", line_color="gray", annotation_text="+1%")
+                    fig_bar.add_hline(y=pred_ontem*0.99, line_dash="dot", line_color="gray", annotation_text="-1%")
                     
-                    fig_bar.update_layout(template="plotly_dark", barmode='group', height=400, title="Validação de Preço (Real vs Previsto)")
+                    fig_bar.update_layout(template="plotly_dark", barmode='group', title="Auditoria: Real vs Previsto", height=450)
                     st.plotly_chart(fig_bar, use_container_width=True)
-                
-                with c_aud2:
-                    erro_p = abs((pred_ontem - preco_real_ontem)/preco_real_ontem)*100
-                    st.write(f"**Desvio da RNA:** {erro_p:.2f}%")
-                    st.write("A auditoria serve para validar se a IA está conseguindo ler o 'sentimento' do mercado nas últimas 48h.")
-                    st.markdown("---")
-                    st.write("📥 **Exportação:**")
-                    csv = pd.DataFrame({"Ticker":[ticker],"Real":[preco_real_ontem],"Previsto":[pred_ontem],"Acerto":[acertou]}).to_csv(index=False).encode('utf-8')
-                    st.download_button("Baixar Auditoria CSV", csv, f"auditoria_{ticker}.csv")
+                    
+                    st.caption(f"Desvio de preço na auditoria: {abs((pred_ontem-preco_real_ontem)/preco_real_ontem)*100:.2f}%")
 
-        else:
-            st.error("Erro ao carregar dados.")
+    except Exception as e:
+        st.error(f"Ocorreu um erro durante o processamento: {e}")
+        st.info("Dica: Clique no botão novamente para reconfirmar a conexão com os servidores.")
 
-# Rodapé
 st.markdown("---")
-st.caption("Desenvolvido para análise de Ativos e ETFs (IAU, SLV, TFLO, NUKZ).")
+st.caption("Fins educacionais. Ativos analisados incluem sua carteira: IAU, SLV, TFLO, SGOV, NUKZ, etc.")
