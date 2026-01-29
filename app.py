@@ -142,4 +142,4 @@ if st.sidebar.button("🚀 Iniciar Relatório Completo"):
         st.info("Dica: Clique no botão novamente para reconfirmar a conexão com os servidores.")
 
 st.markdown("---")
-st.caption("Fins educacionais. Ativos analisados incluem sua carteira: IAU, SLV, TFLO, SGOV, NUKZ, etc.")
+st.caption("Fins educacionais. O mercado financeiro possui riscos e as predições desta ferramenta não constituem recomendação de compra ou venda.")
