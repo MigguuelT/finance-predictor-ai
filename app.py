@@ -9,104 +9,122 @@ import google.generativeai as genai
 import plotly.graph_objects as go
 
 # 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(
-    page_title="Preditor Financeiro RNA + Gemini 2.0",
-    page_icon="📈",
-    layout="wide"
-)
+st.set_page_config(page_title="IA Financeira Pro: Evolução Temporal & RNA", page_icon="📉", layout="wide")
 
-# 2. CONFIGURAÇÃO DE SEGURANÇA (SECRETS) E MODELO
+# 2. CONFIGURAÇÃO DE SEGURANÇA E MODELO (GEMINI 2.0 FLASH)
 try:
-    # Puxa a chave das configurações de Secrets do Streamlit
     GEMINI_CHAVE = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=GEMINI_CHAVE)
-    
-    # Utilizando a versão mais recente e rápida: Gemini 2.0 Flash
     model_gemini = genai.GenerativeModel('gemini-2.0-flash')
 except Exception as e:
-    st.error("Erro ao configurar API do Gemini. Verifique os Secrets.")
+    st.error("Erro ao configurar API do Gemini. Verifique os Secrets no Streamlit Cloud.")
     st.stop()
 
-# 3. INTERFACE LATERAL (SIDEBAR)
-st.sidebar.header("⚙️ Parâmetros do Modelo")
-ticker_input = st.sidebar.text_input("Ticker do Ativo (ex: PETR4.SA, AAPL, BTC-USD)", value="PETR4.SA").upper()
-periodo_selecionado = st.sidebar.selectbox("Histórico para Treino", ["2y", "5y", "10y"], index=0)
-epocas_treino = st.sidebar.slider("Épocas de Treino (RNA)", 10, 100, 20)
+# 3. FUNÇÃO PARA INDICADOR RSI (Índice de Força Relativa)
+def calcular_rsi(data, window=14):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
-st.title("📈 Predição de Ativos com RNA & Gemini 2.0 Flash")
-st.markdown("---")
+# 4. INTERFACE LATERAL
+st.sidebar.header("🔍 Painel de Controle")
+ticker_input = st.sidebar.text_input("Ticker (Ex: PETR4.SA, IAU, SLV, NUK, AAPL)", value="IAU").upper()
+periodo = st.sidebar.selectbox("Período de Análise Temporal", ["1y", "2y", "5y", "10y"], index=1)
+epocas = st.sidebar.slider("Refinamento da RNA (Épocas)", 10, 100, 30)
 
-# 4. EXECUÇÃO DO PROCESSO
-if st.sidebar.button("📊 Iniciar Previsão"):
-    with st.spinner(f'Buscando dados de {ticker_input} e treinando rede neural...'):
-        
-        # Coleta de dados
-        dados = yf.download(ticker_input, period=periodo_selecionado)
+st.title("📈 Evolução Temporal e Predição com IA")
+st.markdown(f"Análise avançada do ativo: **{ticker_input}**")
+
+# 5. PROCESSAMENTO
+if st.sidebar.button("Executar Análise Completa"):
+    with st.spinner('Baixando histórico, calculando indicadores e treinando RNA...'):
+        # Coleta de dados via Yahoo Finance
+        dados = yf.download(ticker_input, period=periodo)
         
         if not dados.empty:
-            # Preparação de Dados (Min-Max Scaling)
-            # 
-            precos_fechamento = dados[['Close']].values
+            # Cálculo de Médias Móveis e RSI
+            dados['MA20'] = dados['Close'].rolling(window=20).mean()
+            dados['MA50'] = dados['Close'].rolling(window=50).mean()
+            dados['RSI'] = calcular_rsi(dados['Close'])
+            
+            # --- GRÁFICO DE EVOLUÇÃO TEMPORAL INTERATIVO ---
+            st.subheader(f"📊 Evolução Temporal: {ticker_input}")
+            fig = go.Figure()
+            
+            # Preço de Fechamento
+            fig.add_trace(go.Scatter(x=dados.index, y=dados['Close'], name='Preço de Fechamento', 
+                                     line=dict(color='#00d4ff', width=2)))
+            # Média Móvel Curta
+            fig.add_trace(go.Scatter(x=dados.index, y=dados['MA20'], name='Média Móvel 20d', 
+                                     line=dict(color='#ffcc00', width=1.5, dash='dash')))
+            # Média Móvel Longa
+            fig.add_trace(go.Scatter(x=dados.index, y=dados['MA50'], name='Média Móvel 50d', 
+                                     line=dict(color='#ff3300', width=1.5, dash='dot')))
+            
+            fig.update_layout(
+                template="plotly_dark",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis_title="Tempo",
+                yaxis_title="Preço (Moeda Original)"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # --- PARTE DA REDE NEURAL ---
+            # Limpeza de dados para treino (remove NaNs gerados pelos indicadores)
+            dados_limpos = dados[['Close']].dropna()
+            precos_v = dados_limpos.values
             scaler = MinMaxScaler(feature_range=(0, 1))
-            dados_normalizados = scaler.fit_transform(precos_fechamento)
-
-            # Criando X (Hoje) e Y (Amanhã)
-            X = dados_normalizados[:-1]
-            y = dados_normalizados[1:]
-
-            # Construção da Rede Neural Artificial
-            # 
+            dados_norm = scaler.fit_transform(precos_v)
+            
+            X, y = dados_norm[:-1], dados_norm[1:]
+            
+            # Arquitetura da RNA
             rna = Sequential([
                 Dense(64, activation='relu', input_dim=1),
                 Dense(32, activation='relu'),
                 Dense(1)
             ])
-            rna.compile(optimizer='adam', loss='mean_squared_error')
+            rna.compile(optimizer='adam', loss='mse')
+            rna.fit(X, y, epochs=epocas, verbose=0)
+
+            # Predição do próximo ponto
+            ultimo_p = dados_norm[-1].reshape(1, 1)
+            pred_n = rna.predict(ultimo_p)
+            preco_previsto = scaler.inverse_transform(pred_n)[0][0]
+            preco_atual = precos_v[-1][0]
+            rsi_atual = dados['RSI'].iloc[-1]
+
+            # --- EXIBIÇÃO DE MÉTRICAS E INSIGHTS ---
+            st.markdown("---")
+            c1, c2 = st.columns([1, 2])
             
-            # Treino silencioso
-            rna.fit(X, y, epochs=epocas_treino, verbose=0)
+            with c1:
+                st.subheader("🎯 Resultado RNA")
+                delta_p = ((preco_previsto / preco_atual) - 1) * 100
+                st.metric("Preço Atual", f"{preco_atual:.2f}")
+                st.metric("Previsão (Prox. Fechamento)", f"{preco_previsto:.2f}", delta=f"{delta_p:.2f}%")
+                st.write(f"**RSI Atual:** {rsi_atual:.2f}")
 
-            # Predição para o próximo dia
-            ultimo_preco_norm = dados_normalizados[-1].reshape(1, 1)
-            predicao_norm = rna.predict(ultimo_preco_norm)
-            preco_previsto = scaler.inverse_transform(predicao_norm)[0][0]
-            preco_atual = precos_fechamento[-1][0]
-
-            # 5. EXIBIÇÃO DOS RESULTADOS
-            col1, col2 = st.columns([2, 1])
-
-            with col1:
-                st.subheader(f"Movimentação Histórica: {ticker_input}")
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=dados.index, y=dados['Close'], name='Preço de Fechamento', line=dict(color='#00ffcc')))
-                fig.update_layout(template="plotly_dark", hovermode="x unified")
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col2:
-                st.subheader("Resultados da RNA")
-                variacao = ((preco_previsto / preco_atual) - 1) * 100
+            with c2:
+                st.subheader("🤖 Parecer Técnico - Gemini 2.0 Flash")
                 
-                st.metric("Preço Atual", f"R$ {preco_atual:.2f}")
-                st.metric("Previsão (Próx. Fechamento)", f"R$ {preco_previsto:.2f}", delta=f"{variacao:.2f}%")
-                
-                st.write("---")
-                st.subheader("🤖 Insight Gemini 2.0 Flash")
-                
-                # Prompt otimizado para análise técnica
+                # Contexto para a IA
                 prompt = (f"Analise o ativo {ticker_input}. Preço atual: {preco_atual:.2f}. "
-                          f"Nossa RNA previu uma variação de {variacao:.2f}% para o próximo fechamento. "
-                          f"Dê um resumo técnico curto (máximo 4 linhas) sobre possíveis suportes ou resistências "
-                          f"baseado no contexto atual de mercado para este ticker.")
+                          f"Indicadores: RSI em {rsi_atual:.2f}, Média Móvel 20d em {dados['MA20'].iloc[-1]:.2f}. "
+                          f"Nossa Rede Neural previu uma variação de {delta_p:.2f}% para o próximo fechamento. "
+                          f"Como especialista financeiro, interprete se o ativo está em tendência de alta, baixa ou neutra.")
                 
                 try:
-                    response = model_gemini.generate_content(prompt)
-                    st.info(response.text)
-                except Exception as e:
-                    st.warning("Não foi possível gerar o insight do Gemini no momento.")
+                    insight = model_gemini.generate_content(prompt)
+                    st.info(insight.text)
+                except:
+                    st.warning("IA temporariamente indisponível para gerar o insight.")
 
         else:
-            st.error("Não encontramos dados para o Ticker informado. Verifique se ele existe no Yahoo Finance.")
+            st.error("Não foi possível carregar dados para este Ticker. Verifique se ele é válido no Yahoo Finance.")
 
-# Rodapé
-st.markdown("---")
-st.caption("Aviso: As previsões são baseadas em modelos matemáticos e não constituem recomendação de investimento.")
+st.sidebar.markdown("---")
+st.sidebar.caption("Desenvolvido para análise de ativos B3 e Globais.")
