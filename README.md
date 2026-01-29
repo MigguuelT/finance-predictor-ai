@@ -1,6 +1,6 @@
 # 📈 IA Financeira: Predictor & Insight
 
-Este projeto utiliza **Redes Neurais Artificiais (RNAs)** para prever o próximo preço de fechamento de ativos financeiros e integra o **Google Gemini 1.5 Flash** para fornecer análises contextuais sobre a previsão.
+Este projeto utiliza **Redes Neurais Artificiais (RNAs)** para prever o próximo preço de fechamento de ativos financeiros e integra o **Google Gemini 2.0 Flash** para fornecer análises contextuais sobre a previsão.
 
 ## 🚀 Funcionalidades
 - **Download de Dados Reais:** Integração com Yahoo Finance (`yfinance`).
