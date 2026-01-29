@@ -1,23 +1,32 @@
-# 📈 IA Financeira: Predictor & Insight
+# 💹 IA Financeira Pro: Auditoria, Predição & Insights Estratégicos
 
-Este projeto utiliza **Redes Neurais Artificiais (RNAs)** para prever o próximo preço de fechamento de ativos financeiros e integra o **Google Gemini 2.0 Flash** para fornecer análises contextuais sobre a previsão.
+Uma plataforma avançada de análise quantitativa que integra **Redes Neurais Artificiais (RNAs)** e **IA Generativa (Gemini 2.0 Flash)** para auxiliar na tomada de decisão e validação de estratégias para ativos da B3 e Globais.
 
-## 🚀 Funcionalidades
-- **Download de Dados Reais:** Integração com Yahoo Finance (`yfinance`).
-- **Deep Learning:** Rede neural densa construída com TensorFlow/Keras.
-- **IA Generativa:** Análise técnica automatizada via Gemini API.
-- **Interface Interativa:** Desenvolvido inteiramente em Streamlit.
+## 🚀 Diferenciais da Versão 2.1
+- **Estabilidade Garantida:** Implementação de `@st.cache_resource` para evitar erros de inicialização na primeira chamada da API e carregamento de modelos.
+- **Insights de Analista Sênior:** O Gemini 2.0 Flash agora realiza o cruzamento de indicadores (RSI + Médias Móveis) com a predição da RNA para gerar pareceres técnicos detalhados.
+- **Navegação por Abas:** Interface organizada entre **Previsão de Futuro** e **Auditoria de Performance**.
+- **Módulo de Backtesting de Curto Prazo:** Auditoria automática que valida a assertividade do modelo comparando a predição de ontem com o fechamento real.
+- **Suporte a Tickers Globais:** Configurado para tratar dados complexos (MultiIndex) de ETFs americanos como `IAU`, `SLV`, `TFLO`, `SGOV` e `NUKZ`.
 
-## 🌟 Novas Funcionalidades (v2.0)
-- **Módulo de Auditoria (Backtesting):** O sistema volta 48h no tempo, treina o modelo e tenta prever o preço de ontem. Ele compara o resultado com o fechamento real para calcular a taxa de acerto de direção.
-- **Integração Gemini 2.0 Flash:** Respostas instantâneas para análise técnica e explicação de desvios de preço.
-- **Tracking de Performance:** Visualização da assertividade (Acerto/Erro) diretamente no painel.
-- **Exportação CSV:** Possibilidade de baixar os resultados para estudos externos.
-- **Suporte Global:** Compatível com ativos B3 (`.SA`) e ETFs americanos (`IAU`, `SLV`, `TFLO`, etc.).
+## 🛠️ Arquitetura Técnica
+O sistema utiliza uma abordagem híbrida:
+1.  **Rede Neural (Keras/TensorFlow):** Responsável pelo processamento estatístico e identificação de padrões de preço.
+2.  **Lógica de Backtesting:** Uma função de "auditoria cega" que isola dados do passado para testar a acurácia direcional do modelo.
+3.  **LLM (Gemini 2.0):** Atua como a camada de interpretação, transformando números e gráficos em insights acionáveis.
 
-## 🛠️ Como rodar localmente
+## ⚙️ Configuração para Streamlit Cloud
+1.  No painel do Streamlit Cloud, acesse **Settings > Secrets**.
+2.  Adicione sua chave de API do Google conforme o formato abaixo:
+    ```toml
+    GEMINI_API_KEY = "SUA_CHAVE_AQUI"
+    ```
 
-1. **Clone o repositório:**
-   ```bash
-   git clone [https://github.com/SEU_USUARIO/NOME_DO_REPO.git](https://github.com/SEU_USUARIO/NOME_DO_REPO.git)
-   cd NOME_DO_REPO
+## 📦 Dependências Principais
+- `yfinance`: Extração de dados de mercado em tempo real.
+- `tensorflow`: Construção e treino das redes neurais.
+- `google-generativeai`: Integração com o modelo Gemini 2.0 Flash.
+- `plotly`: Visualização interativa de gráficos temporais e de auditoria.
+
+---
+*Aviso Legal: Os resultados gerados são baseados em modelos probabilísticos e análise histórica. O mercado financeiro possui riscos e as predições desta ferramenta não constituem recomendação de compra ou venda.*
