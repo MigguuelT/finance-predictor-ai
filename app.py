@@ -18,7 +18,7 @@ def configurar_ai():
     try:
         chave = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=chave)
-        return genai.GenerativeModel('gemini-2.0-flash')
+        return genai.GenerativeModel('gemma-3-27b-it')
     except Exception as e:
         st.error(f"Erro ao configurar API: {e}")
         return None
